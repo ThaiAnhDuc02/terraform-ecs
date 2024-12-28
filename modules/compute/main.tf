@@ -1,0 +1,43 @@
+# Tạo EC2 Instances
+
+resource "aws_instance" "ec2_instances" {
+  for_each = { for inst in var.ec2_instances : inst.name => inst }
+  
+  ami                    = each.value.ami
+  instance_type         = each.value.instance_type
+  key_name              = var.key_name
+  subnet_id             = each.value.subnet_id
+  vpc_security_group_ids = each.value.security_group_ids
+  user_data = <<-EOF
+  #!/bin/bash
+    sudo apt update -y
+    sudo apt upgrade -y
+
+    # Install Docker dependencies
+    sudo apt-get install -y ca-certificates curl
+    sudo install -m 0755 -d /etc/apt/keyrings
+    sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+    # Add Docker repository and install Docker
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    sudo apt-get update
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+    # Install MySQL client
+    sudo apt install -y mysql-client
+
+    # Clone Git repository và set quyền cho ubuntu user
+    git clone https://github.com/AWS-First-Cloud-Journey/aws-fcj-container-app.git /home/ubuntu/aws-fcj-container-app
+    chown -R ubuntu:ubuntu /home/ubuntu/aws-fcj-container-app
+
+    # Thêm user ubuntu vào docker group
+    usermod -aG docker ubuntu
+  EOF
+
+  tags = {
+    Name   = "${var.compute_root_name}-${each.value.name}"
+    Type   = "EC2"
+    Author = var.author
+  }
+}
